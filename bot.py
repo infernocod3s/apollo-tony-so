@@ -2,8 +2,8 @@ import os
 import logging
 import datetime
 import asyncio
-from dotenv import load_dotenv
-import streamlit as st
+from flask import Flask
+from threading import Thread
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
@@ -19,6 +19,20 @@ requests = {}
 
 # Bot token
 BOT_TOKEN = "8158879689:AAH2laSWl-k1KX0MMzLptBJlCeNzknOHvNk"
+
+# Flask app for keep-alive
+app = Flask('')
+
+@app.route('/')
+def home():
+    return "Bot is alive!"
+
+def run():
+    app.run(host='0.0.0.0', port=8080)
+
+def keep_alive():
+    t = Thread(target=run)
+    t.start()
 
 class FileRequest:
     def __init__(self, request_id, requester_id, target_user_id, link_name, url):
@@ -151,7 +165,10 @@ async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"File uploaded by {update.effective_user.mention_html()}"
             )
 
-def start_bot():
+def main():
+    # Start the keep-alive server
+    keep_alive()
+    
     # Initialize bot
     application = Application.builder().token(BOT_TOKEN).build()
 
@@ -165,27 +182,5 @@ def start_bot():
     # Start the bot
     application.run_polling(allowed_updates=Update.ALL_TYPES)
 
-# Streamlit interface
-def streamlit_interface():
-    st.title("Telegram File Request Bot")
-    st.write("Bot is running in the background!")
-    
-    # Display current requests
-    st.subheader("Current Requests")
-    if requests:
-        for chat_id, chat_requests in requests.items():
-            st.write(f"Chat ID: {chat_id}")
-            for req in chat_requests:
-                st.json(req.to_dict())
-    else:
-        st.write("No requests yet")
-
 if __name__ == "__main__":
-    import threading
-    # Start the bot in a separate thread
-    bot_thread = threading.Thread(target=start_bot)
-    bot_thread.daemon = True  # Make thread daemon so it exits when main thread exits
-    bot_thread.start()
-    
-    # Run Streamlit interface
-    streamlit_interface() 
+    main() 
