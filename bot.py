@@ -1,0 +1,197 @@
+import os
+import logging
+import datetime
+from dotenv import load_dotenv
+import streamlit as st
+from telegram import Update
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
+
+# Load environment variables
+load_dotenv()
+
+# Configure logging
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
+logger = logging.getLogger(__name__)
+
+# Store requests in memory
+requests = {}
+
+class FileRequest:
+    def __init__(self, request_id, requester_id, target_user_id, link_name, url):
+        self.request_id = request_id
+        self.requester_id = requester_id
+        self.target_user_id = target_user_id
+        self.link_name = link_name
+        self.url = url
+        self.created_at = datetime.datetime.now()
+        self.completed = False
+        self.completed_at = None
+
+    def to_dict(self):
+        return {
+            'request_id': self.request_id,
+            'requester_id': self.requester_id,
+            'target_user_id': self.target_user_id,
+            'link_name': self.link_name,
+            'url': self.url,
+            'created_at': self.created_at,
+            'completed': self.completed,
+            'completed_at': self.completed_at
+        }
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "👋 Welcome to the File Request Bot!\n\n"
+        "I help manage file requests in groups. Here's how to use me:\n\n"
+        "1. To request a file from someone:\n"
+        "   /request @username link_name url\n\n"
+        "2. To view pending requests:\n"
+        "   /queue\n\n"
+        "3. To get help:\n"
+        "   /help"
+    )
+
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "📚 Available commands:\n\n"
+        "/start - Start the bot\n"
+        "/help - Show this help message\n"
+        "/request @username link_name url - Request a file from a user\n"
+        "/queue - Show pending requests in this group"
+    )
+
+async def request(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.effective_chat.type in ['group', 'supergroup']:
+        await update.message.reply_text("This command can only be used in groups!")
+        return
+
+    if len(context.args) < 3:
+        await update.message.reply_text(
+            "Please use the format: /request @username link_name url"
+        )
+        return
+
+    target_username = context.args[0]
+    if not target_username.startswith('@'):
+        await update.message.reply_text("Please mention the user with @")
+        return
+
+    link_name = context.args[1]
+    url = context.args[2]
+
+    # Generate a unique request ID
+    request_id = f"{update.effective_chat.id}_{len(requests) + 1}"
+
+    # Create new request
+    new_request = FileRequest(
+        request_id=request_id,
+        requester_id=update.effective_user.id,
+        target_user_id=target_username,
+        link_name=link_name,
+        url=url
+    )
+
+    # Store request
+    if update.effective_chat.id not in requests:
+        requests[update.effective_chat.id] = []
+    requests[update.effective_chat.id].append(new_request)
+
+    # Notify the group
+    await update.message.reply_text(
+        f"📝 New file request:\n"
+        f"From: {update.effective_user.mention_html()}\n"
+        f"To: {target_username}\n"
+        f"Link: {link_name}\n"
+        f"URL: {url}"
+    )
+
+async def queue(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.effective_chat.type in ['group', 'supergroup']:
+        await update.message.reply_text("This command can only be used in groups!")
+        return
+
+    chat_id = update.effective_chat.id
+    if chat_id not in requests or not requests[chat_id]:
+        await update.message.reply_text("No pending requests in this group!")
+        return
+
+    message = "📋 Pending Requests:\n\n"
+    for req in requests[chat_id]:
+        if not req.completed:
+            message += (
+                f"Request ID: {req.request_id}\n"
+                f"From: {req.requester_id}\n"
+                f"To: {req.target_user_id}\n"
+                f"Link: {req.link_name}\n"
+                f"URL: {req.url}\n"
+                f"Created: {req.created_at}\n\n"
+            )
+
+    await update.message.reply_text(message)
+
+async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.effective_chat.type in ['group', 'supergroup']:
+        return
+
+    chat_id = update.effective_chat.id
+    if chat_id not in requests:
+        return
+
+    user_id = update.effective_user.id
+    for req in requests[chat_id]:
+        if not req.completed and str(req.target_user_id) == f"@{update.effective_user.username}":
+            req.completed = True
+            req.completed_at = datetime.datetime.now()
+            await update.message.reply_text(
+                f"✅ Request {req.request_id} has been completed!\n"
+                f"File uploaded by {update.effective_user.mention_html()}"
+            )
+
+def main():
+    # Initialize bot
+    application = Application.builder().token(os.getenv('BOT_TOKEN')).build()
+
+    # Add handlers
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("help", help_command))
+    application.add_handler(CommandHandler("request", request))
+    application.add_handler(CommandHandler("queue", queue))
+    application.add_handler(MessageHandler(filters.Document.ALL, handle_file))
+
+    # Start the bot
+    application.run_polling(allowed_updates=Update.ALL_TYPES)
+
+def run_bot():
+    import asyncio
+    # Create new event loop for the thread
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    main()
+
+# Streamlit interface
+def streamlit_interface():
+    st.title("Telegram File Request Bot")
+    st.write("Bot is running in the background!")
+    
+    # Display current requests
+    st.subheader("Current Requests")
+    if requests:
+        for chat_id, chat_requests in requests.items():
+            st.write(f"Chat ID: {chat_id}")
+            for req in chat_requests:
+                st.json(req.to_dict())
+    else:
+        st.write("No requests yet")
+
+if __name__ == "__main__":
+    import threading
+    # Start the bot in a separate thread
+    bot_thread = threading.Thread(target=run_bot)
+    bot_thread.daemon = True  # Make thread daemon so it exits when main thread exits
+    bot_thread.start()
+    
+    # Run Streamlit interface
+    streamlit_interface() 
