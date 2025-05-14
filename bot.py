@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 import streamlit as st
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
+import asyncio
 
 # Load environment variables
 load_dotenv()
@@ -150,7 +151,7 @@ async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"File uploaded by {update.effective_user.mention_html()}"
             )
 
-def main():
+async def run_bot():
     # Initialize bot
     application = Application.builder().token(os.getenv('BOT_TOKEN')).build()
 
@@ -162,14 +163,12 @@ def main():
     application.add_handler(MessageHandler(filters.Document.ALL, handle_file))
 
     # Start the bot
-    application.run_polling(allowed_updates=Update.ALL_TYPES)
+    await application.initialize()
+    await application.start()
+    await application.run_polling(allowed_updates=Update.ALL_TYPES)
 
-def run_bot():
-    import asyncio
-    # Create new event loop for the thread
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    main()
+def start_bot():
+    asyncio.run(run_bot())
 
 # Streamlit interface
 def streamlit_interface():
@@ -189,7 +188,7 @@ def streamlit_interface():
 if __name__ == "__main__":
     import threading
     # Start the bot in a separate thread
-    bot_thread = threading.Thread(target=run_bot)
+    bot_thread = threading.Thread(target=start_bot)
     bot_thread.daemon = True  # Make thread daemon so it exits when main thread exits
     bot_thread.start()
     
