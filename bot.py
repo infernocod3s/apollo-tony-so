@@ -151,7 +151,7 @@ async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"File uploaded by {update.effective_user.mention_html()}"
             )
 
-async def setup_bot():
+def start_bot():
     # Initialize bot
     application = Application.builder().token(os.getenv('BOT_TOKEN')).build()
 
@@ -163,17 +163,7 @@ async def setup_bot():
     application.add_handler(MessageHandler(filters.Document.ALL, handle_file))
 
     # Start the bot
-    await application.initialize()
-    await application.start()
-    await application.run_polling(allowed_updates=Update.ALL_TYPES)
-
-def run_bot():
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    try:
-        loop.run_until_complete(setup_bot())
-    finally:
-        loop.close()
+    application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 # Streamlit interface
 def streamlit_interface():
@@ -193,7 +183,7 @@ def streamlit_interface():
 if __name__ == "__main__":
     import threading
     # Start the bot in a separate thread
-    bot_thread = threading.Thread(target=run_bot)
+    bot_thread = threading.Thread(target=start_bot)
     bot_thread.daemon = True  # Make thread daemon so it exits when main thread exits
     bot_thread.start()
     
