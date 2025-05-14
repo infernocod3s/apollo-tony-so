@@ -7,9 +7,6 @@ import streamlit as st
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
-# Load environment variables
-load_dotenv()
-
 # Configure logging
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -19,6 +16,9 @@ logger = logging.getLogger(__name__)
 
 # Store requests in memory
 requests = {}
+
+# Bot token
+BOT_TOKEN = "8158879689:AAH2laSWl-k1KX0MMzLptBJlCeNzknOHvNk"
 
 class FileRequest:
     def __init__(self, request_id, requester_id, target_user_id, link_name, url):
@@ -153,7 +153,7 @@ async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def start_bot():
     # Initialize bot
-    application = Application.builder().token(os.getenv('BOT_TOKEN')).build()
+    application = Application.builder().token(BOT_TOKEN).build()
 
     # Add handlers
     application.add_handler(CommandHandler("start", start))
